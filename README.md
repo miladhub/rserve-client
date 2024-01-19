@@ -7,8 +7,13 @@ $ mvn clean install
 # Run
 
 ```shell
+$/usr/local/bin/R \
+  -e 'library(Rserve); Rserve(6700, args = "--vanilla --RS-conf ~/Rserve.conf")'
+```
+
+```shell
 $ java -cp "target/*" com.acn.RserveClient \
-  localhost 16700 10 40 5 'Sys.sleep(1)'
+  localhost 6700 10 40 5 'Sys.sleep(1)'
 ```
 
 # Monitoring
