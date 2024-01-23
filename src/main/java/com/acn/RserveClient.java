@@ -13,11 +13,19 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @SuppressWarnings({"ResultOfMethodCallIgnored"})
-public class RserveClient {
+public class RserveClient implements AutoCloseable {
+    private Socket socket;
+    private RConnection conn;
+
+    public RserveClient(Socket socket, RConnection conn) {
+        this.socket = socket;
+        this.conn = conn;
+    }
+
     public static void main(String[] args) throws InterruptedException {
-        if (args.length != 6) {
-            System.err.println("Args: <host> <port> <n_threads> <n_jobs> <timeout_sec> <code>");
-            System.err.println("Example: localhost 16700 10 40 5 'Sys.sleep(1)'");
+        if (args.length != 7) {
+            System.err.println("args: <r_host> <r_port> <n_threads> <n_jobs> <wait_sec> <so_timeout_sec> <code>");
+            System.err.println("example: localhost 6700 10 40 5 3 'Sys.sleep(1)'");
             System.exit(1);
         }
 
@@ -25,85 +33,105 @@ public class RserveClient {
         int port = Integer.parseInt(args[1]);
         int threads = Integer.parseInt(args[2]);
         int nJobs = Integer.parseInt(args[3]);
-        int timeout = Integer.parseInt(args[4]);
-        String code = args[5];
-
-        Integer soTimeout = readTimeout();
+        int wait = Integer.parseInt(args[4]);
+        int soTimeout = Integer.parseInt(args[5]);
+        String code = args[6];
 
         ExecutorService executors = Executors.newFixedThreadPool(threads);
-        AtomicInteger count = new AtomicInteger(0);
-        AtomicInteger failed = new AtomicInteger(0);
+        AtomicInteger succeededCounter = new AtomicInteger(0);
+        AtomicInteger failedCounter = new AtomicInteger(0);
         List<Future<?>> futures = new ArrayList<>();
         for (int i = 0; i < nJobs; i++) {
-            int finalI = i;
-            futures.add(executors.submit(() -> invokeR(host, port, soTimeout, count, failed, code, finalI)));
+            int current = i;
+            futures.add(executors.submit(() -> invokeR(
+                    host,
+                    port,
+                    soTimeout,
+                    succeededCounter,
+                    failedCounter,
+                    code,
+                    current)));
         }
+
         executors.shutdown();
-        executors.awaitTermination(timeout, TimeUnit.SECONDS);
-        int completed = count.get();
-        int nFailed = failed.get();
-        System.out.println("Completed " + completed + " jobs out of " + nJobs +
-                           ", failed: " + nFailed + ", not completed: " + (nJobs - completed - nFailed));
+        executors.awaitTermination(wait, TimeUnit.SECONDS);
+        int succeeded = succeededCounter.get();
+        int failed = failedCounter.get();
+        System.out.println("succeeded: " + succeeded +
+                           ", failed: " + failed +
+                           ", not completed: " + (nJobs - succeeded - failed));
+
         if (!executors.isTerminated()) {
-            System.out.println("Timed out, cancelling");
+            System.out.println("hit ctrl-C to stop waiting");
             futures.forEach(f -> f.cancel(true));
         }
-    }
-
-    private static Integer readTimeout() {
-        String timeoutStr = System.getProperty("rserve.timeout");
-        if (timeoutStr != null) {
-            System.err.println("Setting timeout: " + timeoutStr);
-            return Integer.parseInt(timeoutStr);
-        } else return null;
     }
 
     private static void invokeR(
             String host,
             int port,
-            Integer soTimeout,
-            AtomicInteger count,
+            int soTimeout,
+            AtomicInteger succeeded,
             AtomicInteger failed,
             String code,
             int i
     ) {
-        Socket sock = null;
-        RConnection conn = null;
-        try {
-            sock = connectToR(host, port, soTimeout);
-            conn = new RConnection(sock);
-            conn.eval(code);
-            System.out.println("i = " + i + " | " + Thread.currentThread().getName() + " | count.get() = " + count.get() + " | timestamp = " + new Date());
-            count.incrementAndGet();
+        try (RserveClient client = newClient(host, port, soTimeout)) {
+            client.conn.eval(code);
+            System.out.println(
+                    "i = " + i + " | " +
+                    Thread.currentThread().getName() + " | " +
+                    "OK" + " | " +
+                    "succeeded = " + succeeded.incrementAndGet() + " | " +
+                    "failed = " + failed.get() + " | " +
+                    "timestamp = " + new Date());
         }
         catch (RserveException e) {
-            failed.incrementAndGet();
-            System.err.println("i = " + i + " | " + "RserveException: " + e.getMessage() + " | timestamp = " + new Date());
+            System.err.println(
+                    "i = " + i + " | " +
+                    Thread.currentThread().getName() + " | " +
+                    "RserveException: " + e.getMessage() + " | " +
+                    "succeeded = " + succeeded.get() + " | " +
+                    "failed = " + failed.incrementAndGet() + " | " +
+                    "timestamp = " + new Date());
         }
         catch (Exception e) {
-            System.err.println("i = " + i + " | " + "Exception: " + e.getMessage() + " | timestamp = " + new Date());
-        }
-        finally {
-            if (conn != null) conn.close();
-            if (sock != null) {
-                try {
-                    sock.close();
-                }
-                catch (IOException e) {
-                    System.err.println("i = " + i + " | " + "IOException closing socket: " + e.getMessage() + " | timestamp = " + new Date());
-                }
-            }
+            System.err.println(
+                    "i = " + i + " | " +
+                    Thread.currentThread().getName() + " | " +
+                    "Exception: " + e.getMessage() + " | " +
+                    "succeeded = " + succeeded.get() + " | " +
+                    "failed = " + failed.incrementAndGet() + " | " +
+                    "timestamp = " + new Date());
         }
     }
 
-    private static Socket connectToR(String host, int port, Integer soTimeout
+    private static RserveClient newClient(
+            String host,
+            int port,
+            int soTimeout
+    ) throws IOException, RserveException {
+        Socket sock = connectToR(host, port, soTimeout);
+        RConnection conn = new RConnection(sock);
+        return new RserveClient(sock, conn);
+    }
+
+    private static Socket connectToR(
+            String host,
+            int port,
+            int soTimeoutSeconds
     ) throws IOException {
-        Socket ss = new Socket(host, port);
+        Socket sock = new Socket(host, port);
         // disable Nagle's algorithm since we really want immediate replies
-        ss.setTcpNoDelay(true);
-        if (soTimeout != null) {
-            ss.setSoTimeout(soTimeout);
-        }
-        return ss;
+        sock.setTcpNoDelay(true);
+        // zero means infinite timeout
+        sock.setSoTimeout(1000 * soTimeoutSeconds);
+        return sock;
+    }
+
+    @Override
+    public void close() throws Exception {
+        if (conn != null) conn.close();
+        if (socket != null) socket.close();
     }
 }
