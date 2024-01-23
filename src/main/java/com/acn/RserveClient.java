@@ -12,10 +12,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-@SuppressWarnings({"ResultOfMethodCallIgnored"})
 public class RserveClient implements AutoCloseable {
-    private Socket socket;
-    private RConnection conn;
+    private final Socket socket;
+    private final RConnection conn;
 
     public RserveClient(Socket socket, RConnection conn) {
         this.socket = socket;
@@ -54,7 +53,7 @@ public class RserveClient implements AutoCloseable {
         }
 
         executors.shutdown();
-        executors.awaitTermination(wait, TimeUnit.SECONDS);
+        assert(executors.awaitTermination(wait, TimeUnit.SECONDS));
         int succeeded = succeededCounter.get();
         int failed = failedCounter.get();
         System.out.println("succeeded: " + succeeded +
