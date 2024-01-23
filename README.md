@@ -13,7 +13,18 @@ $/usr/local/bin/R \
 
 ```shell
 $ java -cp "target/*" com.acn.RserveClient \
-  localhost 6700 10 40 5 'Sys.sleep(1)'
+  localhost 16700 100 100 300 4 'Sys.sleep(3)' 2> /dev/null
+#3   | pool-1-thread-4  | OK                                           | ok = 3   | ko = 0   | timestamp = 2024-01-23T15:26:47.201015Z
+#6   | pool-1-thread-7  | OK                                           | ok = 8   | ko = 0   | timestamp = 2024-01-23T15:26:47.201133Z
+#4   | pool-1-thread-5  | OK                                           | ok = 6   | ko = 0   | timestamp = 2024-01-23T15:26:47.201095Z
+#1   | pool-1-thread-2  | OK                                           | ok = 10  | ko = 0   | timestamp = 2024-01-23T15:26:47.201474Z
+#0   | pool-1-thread-1  | OK                                           | ok = 5   | ko = 0   | timestamp = 2024-01-23T15:26:47.201099Z
+#2   | pool-1-thread-3  | OK                                           | ok = 7   | ko = 0   | timestamp = 2024-01-23T15:26:47.201055Z
+#9   | pool-1-thread-10 | OK                                           | ok = 2   | ko = 0   | timestamp = 2024-01-23T15:26:47.201066Z
+#7   | pool-1-thread-8  | OK                                           | ok = 9   | ko = 0   | timestamp = 2024-01-23T15:26:47.201154Z
+#5   | pool-1-thread-6  | OK                                           | ok = 4   | ko = 0   | timestamp = 2024-01-23T15:26:47.201073Z
+#8   | pool-1-thread-9  | OK                                           | ok = 1   | ko = 0   | timestamp = 2024-01-23T15:26:47.201003Z
+succeeded: 10, failed: 0, not completed: 0
 ```
 
 # Monitoring

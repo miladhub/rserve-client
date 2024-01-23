@@ -5,10 +5,9 @@ import org.rosuda.REngine.Rserve.RserveException;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.util.*;
+import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -37,72 +36,66 @@ public class RserveClient implements AutoCloseable {
         String code = args[6];
 
         ExecutorService executors = Executors.newFixedThreadPool(threads);
-        AtomicInteger succeededCounter = new AtomicInteger(0);
-        AtomicInteger failedCounter = new AtomicInteger(0);
-        List<Future<?>> futures = new ArrayList<>();
+        AtomicInteger succeeded = new AtomicInteger(0);
+        AtomicInteger failed = new AtomicInteger(0);
         for (int i = 0; i < nJobs; i++) {
             int current = i;
-            futures.add(executors.submit(() -> invokeR(
-                    host,
-                    port,
-                    soTimeout,
-                    succeededCounter,
-                    failedCounter,
-                    code,
-                    current)));
+            executors.submit(() -> {
+                try (RserveClient client = newClient(host, port, soTimeout)) {
+                    client.conn.eval(code);
+                    logSuccess(current, succeeded, failed);
+                }
+                catch (Exception e) {
+                    logFailure(current, succeeded, failed, e);
+                }
+            });
         }
 
         executors.shutdown();
-        assert(executors.awaitTermination(wait, TimeUnit.SECONDS));
-        int succeeded = succeededCounter.get();
-        int failed = failedCounter.get();
-        System.out.println("succeeded: " + succeeded +
-                           ", failed: " + failed +
-                           ", not completed: " + (nJobs - succeeded - failed));
+        boolean terminated = executors.awaitTermination(wait, TimeUnit.SECONDS);
 
-        if (!executors.isTerminated()) {
-            System.out.println("hit ctrl-C to stop waiting");
-            futures.forEach(f -> f.cancel(true));
-        }
+        int nSucceeded = succeeded.get();
+        int nFailed = failed.get();
+        int notCompleted = nJobs - nSucceeded - nFailed;
+        System.out.println("succeeded: " + nSucceeded +
+                           ", failed: " + nFailed +
+                           ", not completed: " + notCompleted +
+                           (terminated
+                                   ? ""
+                                   : ", hit ctrl-C to stop waiting"));
     }
 
-    private static void invokeR(
-            String host,
-            int port,
-            int soTimeout,
+    private static void logSuccess(
+            int i,
+            AtomicInteger succeeded,
+            AtomicInteger failed
+    ) {
+        System.out.println(
+                pad(4, "#" + i) + " | " +
+                pad(16, Thread.currentThread().getName()) + " | " +
+                pad(44, "OK") + " | " +
+                pad(8, "ok = " + succeeded.incrementAndGet()) + " | " +
+                pad(8, "ko = " + failed.get()) + " | " +
+                "timestamp = " + Instant.now());
+    }
+
+    private static void logFailure(
+            int i,
             AtomicInteger succeeded,
             AtomicInteger failed,
-            String code,
-            int i
+            Exception e
     ) {
-        try (RserveClient client = newClient(host, port, soTimeout)) {
-            client.conn.eval(code);
-            System.out.println(
-                    "i = " + i + " | " +
-                    Thread.currentThread().getName() + " | " +
-                    "OK" + " | " +
-                    "succeeded = " + succeeded.incrementAndGet() + " | " +
-                    "failed = " + failed.get() + " | " +
-                    "timestamp = " + new Date());
-        }
-        catch (RserveException e) {
-            System.err.println(
-                    "i = " + i + " | " +
-                    Thread.currentThread().getName() + " | " +
-                    "RserveException: " + e.getMessage() + " | " +
-                    "succeeded = " + succeeded.get() + " | " +
-                    "failed = " + failed.incrementAndGet() + " | " +
-                    "timestamp = " + new Date());
-        }
-        catch (Exception e) {
-            System.err.println(
-                    "i = " + i + " | " +
-                    Thread.currentThread().getName() + " | " +
-                    "Exception: " + e.getMessage() + " | " +
-                    "succeeded = " + succeeded.get() + " | " +
-                    "failed = " + failed.incrementAndGet() + " | " +
-                    "timestamp = " + new Date());
-        }
+        System.out.println(
+                pad(4, "#" + i) + " | " +
+                pad(16, Thread.currentThread().getName()) + " | " +
+                pad(44, e.getMessage()) + " | " +
+                pad(8, "ok = " + succeeded.get()) + " | " +
+                pad(8, "ko = " + failed.incrementAndGet()) + " | " +
+                "timestamp = " + Instant.now());
+    }
+
+    private static String pad(int n, String value) {
+        return String.format("%-" + n + "s", value);
     }
 
     private static RserveClient newClient(
