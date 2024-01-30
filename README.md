@@ -12,7 +12,7 @@ $/usr/local/bin/R \
 ```
 
 ```shell
-$ java -cp "target/*" com.acn.RserveClient \
+$ java -cp "target/*" org.example.RserveClient \
   localhost 16700 100 100 300 4 'Sys.sleep(3)' 2> /dev/null
 #3   | pool-1-thread-4  | OK                                           | ok = 3   | ko = 0   | timestamp = 2024-01-23T15:26:47.201015Z
 #6   | pool-1-thread-7  | OK                                           | ok = 8   | ko = 0   | timestamp = 2024-01-23T15:26:47.201133Z
@@ -32,7 +32,7 @@ succeeded: 10, failed: 0, not completed: 0
 Client PID:
 
 ```shell
-$ ps -ef | grep com.acn.RserveClient | grep -v grep | awk '{ print $2 }'
+$ ps -ef | grep org.example.RserveClient | grep -v grep | awk '{ print $2 }'
 63674
 ```
 
@@ -56,15 +56,15 @@ java    63674 milad.bourhani   19u  IPv6 0x8ca91e99dc1b48e7      0t0  TCP localh
 Threads:
 
 ```shell
-$ jstack 63674 | grep com.acn.RserveClient.invokeR
-	at com.acn.RserveClient.invokeR(RserveClient.java:51)
-	at com.acn.RserveClient.invokeR(RserveClient.java:51)
-	at com.acn.RserveClient.invokeR(RserveClient.java:51)
-	at com.acn.RserveClient.invokeR(RserveClient.java:51)
-	at com.acn.RserveClient.invokeR(RserveClient.java:51)
-	at com.acn.RserveClient.invokeR(RserveClient.java:51)
-	at com.acn.RserveClient.invokeR(RserveClient.java:51)
-	at com.acn.RserveClient.invokeR(RserveClient.java:51)
-	at com.acn.RserveClient.invokeR(RserveClient.java:51)
-	at com.acn.RserveClient.invokeR(RserveClient.java:51)
+$ jstack 63674 | grep org.example.RserveClient.invokeR
+	at org.example.RserveClient.invokeR(RserveClient.java:51)
+	at org.example.RserveClient.invokeR(RserveClient.java:51)
+	at org.example.RserveClient.invokeR(RserveClient.java:51)
+	at org.example.RserveClient.invokeR(RserveClient.java:51)
+	at org.example.RserveClient.invokeR(RserveClient.java:51)
+	at org.example.RserveClient.invokeR(RserveClient.java:51)
+	at org.example.RserveClient.invokeR(RserveClient.java:51)
+	at org.example.RserveClient.invokeR(RserveClient.java:51)
+	at org.example.RserveClient.invokeR(RserveClient.java:51)
+	at org.example.RserveClient.invokeR(RserveClient.java:51)
 ```
